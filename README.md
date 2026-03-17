@@ -4,7 +4,7 @@ API RESTful em Flask para cadastro e consulta de imoveis.
 
 ## API publica (EC2 AWS)
 
-Base da API: #inserir texto fazer o deploy
+Base da API: http://3.239.5.102/imoveis
 
 ## Rotas
 
