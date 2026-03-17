@@ -2,6 +2,10 @@
 
 API RESTful em Flask para cadastro e consulta de imoveis.
 
+## API publica (EC2 AWS)
+
+Base da API: #inserir texto fazer o deploy
+
 ## Rotas
 
 - `GET /imoveis`: lista todos os imoveis.
@@ -24,32 +28,36 @@ API RESTful em Flask para cadastro e consulta de imoveis.
 pip install -r requirements.txt
 ```
 
-3. Rode os testes:
+3. Crie o arquivo `.env` na raiz do projeto com as credenciais do MySQL.
+
+4. Rode os testes:
 
 ```bash
 pytest -q
 ```
 
-4. Inicie a API:
+5. Inicie a API:
 
 ```bash
 python api.py
 ```
 
-Se nenhuma variavel de ambiente for definida, a aplicacao usa SQLite local para desenvolvimento.
-
 ## Banco MySQL no Aiven
 
 1. Baixe o certificado CA do servico MySQL no Aiven.
-2. Copie `.env.example` para `.env`.
-3. Preencha `DATABASE_URL` com a string do seu banco.
-4. Ajuste `MYSQL_SSL_CA` com o caminho do certificado baixado.
+2. Crie o arquivo `.env` na raiz do projeto.
+3. Preencha as variaveis de conexao com o banco.
+4. Ajuste `ssl_ca` com o caminho do certificado baixado.
 
 Exemplo:
 
 ```env
-DATABASE_URL=mysql+pymysql://avnadmin:SUA_SENHA@mysql-seu-projeto.aivencloud.com:12345/defaultdb
-MYSQL_SSL_CA=ca.pem
+host=mysql-seu-projeto.aivencloud.com
+port=12345
+user=avnadmin
+password=SUA_SENHA
+database=defaultdb
+ssl_ca=ca.pem
 PORT=5000
 ```
 
@@ -79,10 +87,11 @@ Passo a passo sugerido:
 3. Instale Python e git no servidor.
 4. Clone o repositorio.
 5. Crie a virtualenv e instale `requirements.txt`.
-6. Configure o arquivo `.env` com os dados do Aiven.
-7. Execute `flask --app api init-db --reset` para preparar o banco.
-8. Suba a API com `python api.py`.
-9. Para manter o processo ativo, configure um servico `systemd`.
+6. Crie o arquivo `.env` na raiz do projeto.
+7. Copie o certificado `ca.pem` para o servidor.
+8. Execute `flask --app api init-db --reset` para preparar o banco.
+9. Suba a API com `python api.py`.
+10. Para manter o processo ativo, configure um servico `systemd`.
 
 Exemplo de `ExecStart` em um servico `systemd`:
 
@@ -90,8 +99,3 @@ Exemplo de `ExecStart` em um servico `systemd`:
 ExecStart=/home/ubuntu/projeto/.venv/bin/python /home/ubuntu/projeto/api.py
 ```
 
-## Observacoes sobre a rubrica
-
-- A API usa verbos HTTP e recursos separados por URI, o que atende ao nivel 2 da Maturidade de Richardson.
-- Os testes automatizados cobrem todas as rotas obrigatorias.
-- Para fechar a nota B na pratica, ainda e necessario fazer o deploy real no EC2 e usar um banco MySQL ativo no Aiven com as credenciais corretas.

@@ -1,67 +1,101 @@
+import sqlite3
 import pytest
 
-from api import Imovel, create_app, db
+from api import create_app
 
 
-def _novo_imovel(**overrides):
-	dados = {
-		"logradouro": "Avenida Paulista",
-		"tipo_logradouro": "Avenida",
-		"bairro": "Bela Vista",
-		"cidade": "Sao Paulo",
-		"cep": "01311-000",
-		"tipo": "apartamento",
-		"valor": 950000.0,
-		"data_aquisicao": "2024-01-10",
-	}
-	dados.update(overrides)
-	return Imovel(**dados)
+# ---------------------------------------------------------------------------
+# FakeConnection / FakeCursor: sqlite3 emulando a interface mysql.connector
+# ---------------------------------------------------------------------------
+
+class _FakeCursor:
+	def __init__(self, conn, dictionary=False):
+		self._cur = conn.cursor()
+		self._dictionary = dictionary
+		self._lastrowid = None
+
+	def execute(self, query, params=None):
+		sqlite_query = query.replace("%s", "?")
+		if params:
+			self._cur.execute(sqlite_query, params)
+		else:
+			self._cur.execute(sqlite_query)
+		self._lastrowid = self._cur.lastrowid
+
+	def fetchall(self):
+		rows = self._cur.fetchall()
+		if self._dictionary and self._cur.description:
+			cols = [d[0] for d in self._cur.description]
+			return [dict(zip(cols, row)) for row in rows]
+		return rows
+
+	def fetchone(self):
+		row = self._cur.fetchone()
+		if row is None:
+			return None
+		if self._dictionary and self._cur.description:
+			cols = [d[0] for d in self._cur.description]
+			return dict(zip(cols, row))
+		return row
+
+	@property
+	def lastrowid(self):
+		return self._lastrowid
+
+	def close(self):
+		pass
+
+
+class _FakeConnection:
+	def __init__(self, sqlite_conn):
+		self._conn = sqlite_conn
+
+	def cursor(self, dictionary=False):
+		return _FakeCursor(self._conn, dictionary=dictionary)
+
+	def commit(self):
+		self._conn.commit()
+
+	def close(self):
+		pass  # mantém viva durante o teste
+
+
+def _criar_banco_teste():
+	conn = sqlite3.connect(":memory:", check_same_thread=False)
+	conn.execute("""
+		CREATE TABLE imoveis (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			logradouro TEXT NOT NULL,
+			tipo_logradouro TEXT,
+			bairro TEXT,
+			cidade TEXT NOT NULL,
+			cep TEXT,
+			tipo TEXT,
+			valor REAL,
+			data_aquisicao TEXT
+		)
+	""")
+	conn.executemany(
+		"INSERT INTO imoveis (logradouro,tipo_logradouro,bairro,cidade,cep,tipo,valor,data_aquisicao)"
+		" VALUES (?,?,?,?,?,?,?,?)",
+		[
+			("Avenida Paulista", "Avenida", "Bela Vista", "Sao Paulo", "01311-000", "apartamento", 950000.0, "2024-01-10"),
+			("Rua das Flores",  "Rua",     "Centro",    "Campinas",  "13010-000", "casa",        780000.0, "2023-07-22"),
+			("Alameda Santos",  "Alameda", "Jardins",   "Sao Paulo",  "01419-002", "apartamento", 1100000.0, "2022-12-01"),
+		],
+	)
+	conn.commit()
+	return conn
 
 
 @pytest.fixture
 def app():
-	app = create_app(
-		{
-			"TESTING": True,
-			"SQLALCHEMY_DATABASE_URI": "sqlite://",
-			"SQLALCHEMY_TRACK_MODIFICATIONS": False,
-		}
-	)
-
-	with app.app_context():
-		db.drop_all()
-		db.create_all()
-		db.session.add_all(
-			[
-				_novo_imovel(),
-				_novo_imovel(
-					logradouro="Rua das Flores",
-					tipo_logradouro="Rua",
-					bairro="Centro",
-					cidade="Campinas",
-					cep="13010-000",
-					tipo="casa",
-					valor=780000.0,
-					data_aquisicao="2023-07-22",
-				),
-				_novo_imovel(
-					logradouro="Alameda Santos",
-					tipo_logradouro="Alameda",
-					bairro="Jardins",
-					cidade="Sao Paulo",
-					cep="01419-002",
-					tipo="apartamento",
-					valor=1100000.0,
-					data_aquisicao="2022-12-01",
-				),
-			]
-		)
-		db.session.commit()
-
-		yield app
-
-		db.session.remove()
-		db.drop_all()
+	sqlite_conn = _criar_banco_teste()
+	fake = _FakeConnection(sqlite_conn)
+	app = create_app(db_factory=lambda: fake)
+	app.config["TESTING"] = True
+	yield app
+	sqlite_conn.close()
 
 
 @pytest.fixture
