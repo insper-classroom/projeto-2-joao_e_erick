@@ -32,6 +32,8 @@ def load_db():
 		"user": os.getenv("user"),
 		"password": os.getenv("password"),
 		"database": os.getenv("database"),
+		"ssl_ca": str((BASE_DIR / os.getenv("ssl_ca")).resolve()),
+		"ssl_disabled": False,
 	}
 	ssl_ca = os.getenv("ssl_ca")
 	if ssl_ca:
